@@ -1,0 +1,33 @@
+.adaptive-plan-grid-container {
+    color: #fff;
+    padding: 1rem;
+    background-color: #222; /* or your preference */
+  }
+  
+  /* Wrapper to allow horizontal scroll if many columns */
+  .adaptive-table-wrapper {
+    overflow-x: auto;
+    margin-top: 1rem;
+  }
+  
+  .adaptive-table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 800px; /* ensure horizontal scroll if stages are many */
+  }
+  
+  .adaptive-table th,
+  .adaptive-table td {
+    border: 1px solid #444;
+    padding: 8px 12px;
+    text-align: left;
+  }
+  
+  .adaptive-table th {
+    background-color: #333;
+  }
+  
+  /* Example styling for stage cells */
+  .stage-cell {
+    text-align: center; 
+  }

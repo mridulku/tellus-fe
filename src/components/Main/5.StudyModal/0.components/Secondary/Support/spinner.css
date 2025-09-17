@@ -1,0 +1,47 @@
+/* spinner.css */
+
+/* 
+   Container: centers the spinner + text. 
+   You can tweak min-height, margins, or alignment as needed.
+*/
+.spinnerContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 150px;
+  }
+  
+  /*
+     The spinner itself: a circle that rotates indefinitely.
+     You can adjust size, border color, border thickness, etc.
+  */
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #ccc;         /* lighter portion */
+    border-top: 4px solid #888;     /* darker portion that shows rotation */
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  
+  /*
+     Text styling: defaults to white text color, but adjust as you prefer.
+  */
+  .spinnerText {
+    margin-top: 1rem;
+    color: #fff;
+    font-size: 1rem;
+  }
+  
+  /*
+     Keyframes for rotation
+  */
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
