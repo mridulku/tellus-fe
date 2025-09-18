@@ -7,6 +7,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebase";
 import { fetchExamType, clearExamType } from "./store/examSlice";
 
+
 import posthog from 'posthog-js';
 
 posthog.init('cFmE06V1he_XWlUEFAvrWB68ixtJ-huLm3qQeYJku6Y', {
@@ -18,6 +19,16 @@ posthog.init('cFmE06V1he_XWlUEFAvrWB68ixtJ-huLm3qQeYJku6Y', {
 /* ---------- third-party css ---------- */
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
+
+import Homepage from "./components/Main/0.tellus/Homepage";   // ← add this
+
+import Dashboard from "./components/Main/0.tellus/Dashboard";
+
+
+import Annotator from "./components/Main/0.tellus/Annotator";
+
+
+
 
 /* ---------- public landing pages ---------- */
 import LandingPage            from "./components/Main/0.PreLogin/0.LandingPage";
@@ -94,8 +105,13 @@ function App() {
            ROOT  → always redirect to /neet
         ──────────────────────────────────────────────── */}
        {/* ───────── PUBLIC: everything ⇒ /neet ───────── */}
-<Route path="/"         element={<Navigate to="/neet" replace />} />
+<Route path="/" element={<Homepage />} />
 <Route path="/neet"     element={<NEETUGLandingPage />} />
+<Route path="/annotator" element={<Annotator />} />
+<Route path="/dashboard" element={<Dashboard />} />
+
+
+
 
 {/* Any of the old slugs immediately bounce to /neet */}
 <Route path="/toefl"         element={<Navigate to="/neet" replace />} />
