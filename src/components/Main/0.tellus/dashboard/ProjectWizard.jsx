@@ -4,7 +4,7 @@ import {
   Box, Typography, Stepper, Step, StepLabel, Button, TextField, Select, MenuItem,
   Grid, Divider, RadioGroup, FormControlLabel, Radio, FormLabel, Checkbox, Switch,
   Chip, Slider, InputLabel, FormControl, OutlinedInput, Tooltip, Paper, Alert,
-  LinearProgress
+  LinearProgress, Tabs, Tab
 } from "@mui/material";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 
@@ -525,9 +525,316 @@ export default function ProjectWizard() {
   };
 
   /* ── STEP 3: Workflow & Rating ─────────────────────────────────────────── */
-  const StepWorkflow = () => (
+ const StepWorkflow = () => {
+  const [previewTab, setPreviewTab] = useState(0);
+  const isRM = form.goal.main === "rm";
+  const isSFT = form.goal.main === "sft";
+  const isSafety = form.goal.main === "safety";
+
+  const scoreIsBinary =
+    isRM &&
+    form.goal.variant === "single" &&
+    Number(form.workflow.rm.scaleMin) === 0 &&
+    Number(form.workflow.rm.scaleMax) === 1;
+
+  /* ── Helpers: chips + summary ────────────────────────────────────────── */
+  const summaryLines = useMemo(() => {
+    const lines = [];
+    if (isSFT) {
+      lines.push(`Format: SFT • Mode: ${form.workflow.sft.mode}`);
+      lines.push(`Completion: ${form.workflow.sft.completeRule || "single_submit"}`);
+      if (form.workflow.sft.multiTurn) lines.push("Multi-turn: On");
+      if (form.workflow.sft.nudge) lines.push(`Nudge: “${form.workflow.sft.nudge}”`);
+    }
+    if (isRM) {
+      lines.push(`Format: RM • ${form.goal.variant}`);
+      if (form.goal.variant === "single") {
+        lines.push(`Rubrics: ${form.workflow.rm.rubrics.join(", ") || "—"}`);
+        lines.push(`Scale: ${form.workflow.rm.scaleMin}–${form.workflow.rm.scaleMax}${scoreIsBinary ? " (Binary)" : ""}`);
+      }
+      if (form.goal.variant === "pairwise") {
+        lines.push(`Reminders: ${form.workflow.rm.rubrics.join(", ") || "—"}`);
+        lines.push(`Tie: ${form.workflow.rm.allowTie ? "On" : "Off"} • Why: ${form.workflow.rm.requireJustification ? "Required" : "Optional/Off"}`);
+      }
+      if (form.goal.variant === "dialogue") {
+        lines.push(`Turns: ${form.workflow.rm.dialogueTurns}`);
+        lines.push(`End rule: ${form.workflow.rm.stopRule || "max_turns"}`);
+        lines.push(`Ratings: ${form.workflow.rm.perTurn ? "Per turn" : "Overall at end"}`);
+        if (form.workflow.rm.followupQuestion) lines.push(`Follow-up: “${form.workflow.rm.followupQuestion}”`);
+      }
+      if (form.workflow.sft.nudge) lines.push(`Nudge: “${form.workflow.sft.nudge}”`);
+    }
+    if (isSafety) {
+      lines.push(`Format: Safety labeling`);
+      lines.push(`Labels: ${form.workflow.safety.labels.join(", ") || "—"}`);
+      lines.push(`Severity: ${form.workflow.safety.severity ? "On" : "Off"}`);
+      if (form.workflow.sft.nudge) lines.push(`Guidance: “${form.workflow.sft.nudge}”`);
+    }
+    return lines;
+  }, [form, isRM, isSFT, isSafety, scoreIsBinary]);
+
+  const ChipsRow = () => {
+    const chips = [];
+    if (isSFT) {
+      chips.push({ k: "SFT", v: form.workflow.sft.mode });
+      chips.push({ k: "Complete", v: form.workflow.sft.completeRule || "single_submit" });
+      if (form.workflow.sft.multiTurn) chips.push({ k: "Multi-turn", v: "On" });
+    }
+    if (isRM) {
+      chips.push({ k: "RM", v: form.goal.variant });
+      if (form.goal.variant === "single") chips.push({ k: "Scale", v: `${form.workflow.rm.scaleMin}–${form.workflow.rm.scaleMax}` });
+      if (form.goal.variant === "pairwise") {
+        chips.push({ k: "Tie", v: form.workflow.rm.allowTie ? "On" : "Off" });
+        chips.push({ k: "Why", v: form.workflow.rm.requireJustification ? "Req" : "Off" });
+      }
+      if (form.goal.variant === "dialogue") {
+        chips.push({ k: "Turns", v: String(form.workflow.rm.dialogueTurns) });
+        chips.push({ k: "Ratings", v: form.workflow.rm.perTurn ? "Per-turn" : "Overall" });
+      }
+    }
+    if (isSafety) {
+      chips.push({ k: "Severity", v: form.workflow.safety.severity ? "On" : "Off" });
+    }
+    return (
+      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 1 }}>
+        {chips.map((c, i) => (
+          <Chip key={i} size="small" label={`${c.k}: ${c.v}`} />
+        ))}
+      </Box>
+    );
+  };
+
+  /* ── Preview pieces (purely visual) ───────────────────────────────────── */
+  const PreviewSliders = ({ rubrics, min, max }) => (
+    <Box sx={{ display: "grid", gridTemplateColumns: "1fr", gap: 1 }}>
+      {rubrics.map((r, i) => (
+        <Box key={i} sx={{ p: 1, border: "1px solid #eee", borderRadius: 1 }}>
+          <Typography variant="caption" color="text.secondary">{r}</Typography>
+          <Slider min={min} max={max} value={Math.round((min + max) / 2)} disabled />
+          <Typography variant="caption" color="text.secondary">{min} ⟶ {max}</Typography>
+        </Box>
+      ))}
+    </Box>
+  );
+
+  const PreviewBinary = ({ rubrics }) => (
+    <Box sx={{ display: "grid", gridTemplateColumns: "1fr", gap: 1 }}>
+      {rubrics.map((r, i) => (
+        <Paper key={i} variant="outlined" sx={{ p: 1, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Typography variant="body2">{r}</Typography>
+          <RadioGroup row value="up">
+            <FormControlLabel value="up" control={<Radio />} label="👍" disabled />
+            <FormControlLabel value="down" control={<Radio />} label="👎" disabled />
+          </RadioGroup>
+        </Paper>
+      ))}
+    </Box>
+  );
+
+  const PreviewAB = () => (
+    <Box sx={{ display: "grid", gap: 1 }}>
+      <Grid container spacing={1}>
+        <Grid item xs={12} md={6}>
+          <Paper variant="outlined" sx={{ p: 1 }}>
+            <Typography variant="overline">Candidate A</Typography>
+            <Typography variant="body2" color="text.secondary">Sample answer A…</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <Paper variant="outlined" sx={{ p: 1 }}>
+            <Typography variant="overline">Candidate B</Typography>
+            <Typography variant="body2" color="text.secondary">Sample answer B…</Typography>
+          </Paper>
+        </Grid>
+      </Grid>
+      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+        <Button size="small" variant="outlined" disabled>Choose A</Button>
+        <Button size="small" variant="outlined" disabled>Choose B</Button>
+        {form.workflow.rm.allowTie && <Button size="small" variant="outlined" disabled>Tie</Button>}
+      </Box>
+      {form.workflow.rm.requireJustification && (
+        <TextField label="Why?" size="small" fullWidth placeholder="One line reason…" disabled />
+      )}
+      {!!form.workflow.rm.rubrics.length && (
+        <Box sx={{ mt: 0.5, display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+          {form.workflow.rm.rubrics.map((r, i) => <Chip key={i} size="small" label={r} />)}
+        </Box>
+      )}
+    </Box>
+  );
+
+  const PreviewDialogue = () => {
+    const turns = Math.max(2, Number(form.workflow.rm.dialogueTurns) || 4);
+    const nodes = [];
+    for (let t = 1; t <= turns; t++) {
+      const isAnnotator = t % 2 === 1;
+      nodes.push(
+        <Box key={t} sx={{ mb: 1.2 }}>
+          <Typography variant="caption" color="text.secondary">
+            {isAnnotator ? `Turn ${t} • You` : `Turn ${t} • Model`}
+          </Typography>
+          <Paper variant="outlined" sx={{ p: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              {isAnnotator ? "Ask a probing question…" : "Sample model reply…"}
+            </Typography>
+          </Paper>
+          {!isAnnotator && form.workflow.rm.perTurn && (
+            <Box sx={{ mt: 0.5 }}>
+              {scoreIsBinary ? (
+                <PreviewBinary rubrics={["Quality (thumbs)"]} />
+              ) : (
+                <PreviewSliders rubrics={["Quality"]} min={form.workflow.rm.scaleMin} max={form.workflow.rm.scaleMax} />
+              )}
+            </Box>
+          )}
+        </Box>
+      );
+    }
+    return (
+      <Box>
+        {nodes}
+        {!form.workflow.rm.perTurn && (
+          <Box sx={{ mt: 1.5 }}>
+            <Typography variant="subtitle2">Overall rating</Typography>
+            {scoreIsBinary ? (
+              <PreviewBinary rubrics={["Overall"]} />
+            ) : (
+              <PreviewSliders rubrics={["Overall"]} min={form.workflow.rm.scaleMin} max={form.workflow.rm.scaleMax} />
+            )}
+            {form.workflow.rm.followupQuestion && (
+              <TextField sx={{ mt: 1 }} label={form.workflow.rm.followupQuestion} fullWidth size="small" disabled />
+            )}
+          </Box>
+        )}
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+          Ends: {form.workflow.rm.stopRule || "max_turns"}
+        </Typography>
+      </Box>
+    );
+  };
+
+  const PreviewSFT = () => (
     <Box>
-      {form.goal.main === "sft" && (
+      <Typography variant="subtitle2">Prompt</Typography>
+      <Paper variant="outlined" sx={{ p: 1, mb: 1 }}>
+        <Typography variant="body2" color="text.secondary">Write a clear explanation of transformers…</Typography>
+      </Paper>
+      <Typography variant="subtitle2">Answer</Typography>
+      <TextField multiline minRows={5} fullWidth placeholder="Type the best answer…" disabled />
+      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+        Completion: {form.workflow.sft.completeRule || "single_submit"} {form.workflow.sft.multiTurn ? "• Multi-turn" : ""}
+      </Typography>
+      {form.workflow.sft.nudge && (
+        <Alert sx={{ mt: 1 }} severity="info">Nudge: {form.workflow.sft.nudge}</Alert>
+      )}
+    </Box>
+  );
+
+  const PreviewSafety = () => (
+    <Box>
+      <Typography variant="subtitle2">Content</Typography>
+      <Paper variant="outlined" sx={{ p: 1, mb: 1 }}>
+        <Typography variant="body2" color="text.secondary">Sample text to label for policy categories…</Typography>
+      </Paper>
+      <Typography variant="subtitle2">Labels</Typography>
+      <Grid container spacing={1} sx={{ mt: 0.5 }}>
+        {form.workflow.safety.labels.map((l, i) => (
+          <Grid key={i} item xs={12} sm={6}>
+            <FormControlLabel control={<Checkbox checked={false} disabled />} label={l} />
+            {form.workflow.safety.severity && (
+              <Slider min={0} max={3} value={1} disabled />
+            )}
+          </Grid>
+        ))}
+      </Grid>
+      {form.workflow.sft.nudge && (
+        <Alert sx={{ mt: 1 }} severity="info">Guidance: {form.workflow.sft.nudge}</Alert>
+      )}
+    </Box>
+  );
+
+  const RaterPreview = () => (
+    <Paper variant="outlined" sx={{ p: 2 }}>
+      <ChipsRow />
+      {isSFT && <PreviewSFT />}
+      {isRM && form.goal.variant === "single" && (
+        scoreIsBinary ? (
+          <PreviewBinary rubrics={form.workflow.rm.rubrics.length ? form.workflow.rm.rubrics : ["Quality"]} />
+        ) : (
+          <PreviewSliders
+            rubrics={form.workflow.rm.rubrics.length ? form.workflow.rm.rubrics : ["Quality"]}
+            min={form.workflow.rm.scaleMin}
+            max={form.workflow.rm.scaleMax}
+          />
+        )
+      )}
+      {isRM && form.goal.variant === "pairwise" && <PreviewAB />}
+      {isRM && form.goal.variant === "dialogue" && <PreviewDialogue />}
+      {isSafety && <PreviewSafety />}
+    </Paper>
+  );
+
+  /* ── AI Configure: naive keyword mapping (optional) ───────────────────── */
+  const [aiText, setAiText] = useState("");
+  const applyAIConfigure = () => {
+    const text = aiText.toLowerCase();
+    // format
+    if (text.includes("dialogue") || text.includes("chat")) {
+      update(["goal", "main"], "rm"); update(["goal", "variant"], "dialogue");
+    } else if (text.includes("a/b") || text.includes("compare")) {
+      update(["goal", "main"], "rm"); update(["goal", "variant"], "pairwise");
+    } else if (text.includes("sft") || text.includes("write")) {
+      update(["goal", "main"], "sft"); update(["goal", "variant"], "write");
+    } else if (text.includes("safety") || text.includes("label")) {
+      update(["goal", "main"], "safety");
+    } else {
+      update(["goal", "main"], "rm"); update(["goal", "variant"], "single");
+    }
+    // rubrics
+    const rubrics = [];
+    if (text.match(/clarity|clear/)) rubrics.push("clarity");
+    if (text.match(/factual|truth/)) rubrics.push("factuality");
+    if (text.match(/helpful/)) rubrics.push("helpfulness");
+    if (text.match(/harmless|safe/)) rubrics.push("harmlessness");
+    if (text.match(/honest/)) rubrics.push("honesty");
+    if (rubrics.length) update(["workflow", "rm", "rubrics"], rubrics);
+    // scale
+    if (text.includes("binary") || text.includes("thumb")) {
+      update(["workflow", "rm", "scaleMin"], 0);
+      update(["workflow", "rm", "scaleMax"], 1);
+    } else if (text.includes("1-5") || text.includes("1 to 5")) {
+      update(["workflow", "rm", "scaleMin"], 1);
+      update(["workflow", "rm", "scaleMax"], 5);
+    } else if (text.includes("1-7") || text.includes("1 to 7")) {
+      update(["workflow", "rm", "scaleMin"], 1);
+      update(["workflow", "rm", "scaleMax"], 7);
+    }
+    // pairwise options
+    update(["workflow", "rm", "allowTie"], /tie/.test(text));
+    update(["workflow", "rm", "requireJustification"], /why|justify|reason/.test(text));
+    // dialogue options
+    const m = text.match(/(\d+)\s*turn/);
+    if (m) update(["workflow", "rm", "dialogueTurns"], Math.max(2, parseInt(m[1], 10)));
+    update(["workflow", "rm", "perTurn"], /per[- ]?turn|each turn/.test(text));
+    if (/refuse/.test(text)) update(["workflow", "rm", "stopRule"], "model_refuses_twice");
+    // safety labels
+    if (form.goal.main === "safety") {
+      const labels = [];
+      if (/tox/i.test(text)) labels.push("toxicity");
+      if (/harass/i.test(text)) labels.push("harassment");
+      if (/hate/i.test(text)) labels.push("hate");
+      if (/pii|privacy/i.test(text)) labels.push("pii");
+      if (/danger|illegal/i.test(text)) labels.push("dangerous");
+      if (labels.length) update(["workflow", "safety", "labels"], labels);
+      update(["workflow", "safety", "severity"], /severity|level/.test(text));
+    }
+  };
+
+  /* ── LEFT PANE (controls) + RIGHT PANE (preview tabs) ─────────────────── */
+  return (
+    <Box>
+      {/* SFT */}
+      {isSFT && (
         <Section title="SFT workflow" sub="Tell us what annotators should do and when an item is done.">
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
@@ -539,21 +846,13 @@ export default function ProjectWizard() {
                   <FormControlLabel value="write" control={<Radio />} label="Write best answer to each prompt" />
                   <FormControlLabel value="author" control={<Radio />} label="Author prompts (and optionally answers)" />
                 </RadioGroup>
-
                 <FormControlLabel
                   sx={{ mt: 1 }}
-                  control={
-                    <Switch
-                      checked={form.workflow.sft.multiTurn}
-                      onChange={(e) => update(["workflow", "sft", "multiTurn"], e.target.checked)}
-                    />
-                  }
+                  control={<Switch checked={form.workflow.sft.multiTurn} onChange={(e) => update(["workflow", "sft", "multiTurn"], e.target.checked)} />}
                   label="Allow multi-turn authoring"
                 />
               </QCard>
-            </Grid>
 
-            <Grid item xs={12} md={6}>
               <QCard title="Completion rule" helper="When is a task considered complete?">
                 <RadioGroup
                   value={form.workflow.sft.completeRule || "single_submit"}
@@ -563,20 +862,65 @@ export default function ProjectWizard() {
                   <FormControlLabel value="multi_fields" control={<Radio />} label="After all required fields / steps are filled" />
                 </RadioGroup>
               </QCard>
+
+              <QCard title="Short nudge / guidance (optional)">
+                <TextField
+                  fullWidth multiline minRows={4}
+                  value={form.workflow.sft.nudge}
+                  onChange={(e) => update(["workflow", "sft", "nudge"], e.target.value)}
+                  placeholder="Prefer helpful, honest, harmless, concise answers."
+                />
+              </QCard>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Paper variant="outlined" sx={{ p: 1.5, mb: 1 }}>
+                <Tabs value={previewTab} onChange={(_, v) => setPreviewTab(v)} variant="fullWidth">
+                  <Tab label="Rater view" />
+                  <Tab label="Summary" />
+                  <Tab label="AI Configure" />
+                </Tabs>
+              </Paper>
+
+              {previewTab === 0 && <RaterPreview />}
+              {previewTab === 1 && (
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  {summaryLines.map((l, i) => (
+                    <Typography key={i} variant="body2" sx={{ mb: 0.5 }}>{l}</Typography>
+                  ))}
+                </Paper>
+              )}
+              {previewTab === 2 && (
+                <Paper variant="outlined" sx={{ p: 2, display: "grid", gap: 1 }}>
+                  <TextField
+                    label="Describe your task (one sentence)"
+                    placeholder="e.g., Compare two summaries for clarity & factuality, allow ties, ask why."
+                    value={aiText}
+                    onChange={(e) => setAiText(e.target.value)}
+                    multiline minRows={3}
+                  />
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Button variant="contained" onClick={applyAIConfigure} disabled={!aiText.trim()}>Generate & Apply</Button>
+                    <Button variant="text" onClick={() => setAiText("")}>Clear</Button>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Tip: Use keywords like “A/B”, “binary”, “dialogue 4 turns”, “per-turn ratings”, “tie”, “why”.
+                  </Typography>
+                </Paper>
+              )}
             </Grid>
           </Grid>
         </Section>
       )}
 
-      {form.goal.main === "rm" && (
+      {/* RM */}
+      {isRM && (
         <Section title="Reward modeling" sub="Pick the evaluation format and how raters will judge answers.">
           <Grid container spacing={2}>
+            {/* LEFT: controls */}
             <Grid item xs={12} md={6}>
               <QCard title="Evaluation format" helper="Single-answer rating, A/B comparison, or dialogue?">
-                <RadioGroup
-                  value={form.goal.variant}
-                  onChange={(e) => update(["goal", "variant"], e.target.value)}
-                >
+                <RadioGroup value={form.goal.variant} onChange={(e) => update(["goal", "variant"], e.target.value)}>
                   <FormControlLabel value="single" control={<Radio />} label="Rate one answer" />
                   <FormControlLabel value="pairwise" control={<Radio />} label="Compare A vs B" />
                   <FormControlLabel value="dialogue" control={<Radio />} label="Back-and-forth dialogue" />
@@ -584,24 +928,32 @@ export default function ProjectWizard() {
               </QCard>
 
               {form.goal.variant !== "dialogue" && (
-                <QCard title="What matters to the rater?" helper="For single-answer, sliders; for pairwise, a short reminder.">
+                <QCard title="What matters to the rater?" helper="For single-answer, sliders; for A/B, a simple reminder strip.">
                   {form.goal.variant === "single" && (
                     <>
                       <TextField
                         fullWidth label="Rubrics (comma separated)"
                         value={form.workflow.rm.rubrics.join(",")}
-                        onChange={(e) => update(["workflow", "rm", "rubrics"], e.target.value.split(",").map((x) => x.trim()).filter(Boolean))}
+                        onChange={(e) =>
+                          update(["workflow", "rm", "rubrics"],
+                            e.target.value.split(",").map((x) => x.trim()).filter(Boolean)
+                          )
+                        }
                       />
                       <Grid container spacing={1} sx={{ mt: 1 }}>
                         <Grid item xs={6}>
-                          <TextField fullWidth type="number" label="Scale min"
-                                     value={form.workflow.rm.scaleMin}
-                                     onChange={(e) => update(["workflow", "rm", "scaleMin"], safeInt(e.target.value, 1))} />
+                          <TextField
+                            fullWidth type="number" label="Scale min"
+                            value={form.workflow.rm.scaleMin}
+                            onChange={(e) => update(["workflow", "rm", "scaleMin"], safeInt(e.target.value, 0))}
+                          />
                         </Grid>
                         <Grid item xs={6}>
-                          <TextField fullWidth type="number" label="Scale max"
-                                     value={form.workflow.rm.scaleMax}
-                                     onChange={(e) => update(["workflow", "rm", "scaleMax"], safeInt(e.target.value, 7))} />
+                          <TextField
+                            fullWidth type="number" label="Scale max"
+                            value={form.workflow.rm.scaleMax}
+                            onChange={(e) => update(["workflow", "rm", "scaleMax"], safeInt(e.target.value, 1))}
+                          />
                         </Grid>
                       </Grid>
                       <Typography variant="caption" color="text.secondary">Tip: set min=0, max=1 for binary thumbs.</Typography>
@@ -618,14 +970,18 @@ export default function ProjectWizard() {
                       <FormControlLabel
                         control={<Switch checked={form.workflow.rm.requireJustification}
                                          onChange={(e) => update(["workflow", "rm", "requireJustification"], e.target.checked)} />}
-                        label="Require short justification"
+                        label="Require one-line “why”"
                       />
                       <TextField
                         sx={{ mt: 1 }} fullWidth
-                        label="Reminder to raters (comma-separated aspects)"
+                        label="Reminders to raters (comma-separated)"
                         placeholder="helpfulness, harmlessness, honesty…"
                         value={form.workflow.rm.rubrics.join(",")}
-                        onChange={(e) => update(["workflow", "rm", "rubrics"], e.target.value.split(",").map((x) => x.trim()).filter(Boolean))}
+                        onChange={(e) =>
+                          update(["workflow", "rm", "rubrics"],
+                            e.target.value.split(",").map((x) => x.trim()).filter(Boolean)
+                          )
+                        }
                       />
                     </>
                   )}
@@ -633,21 +989,21 @@ export default function ProjectWizard() {
               )}
 
               {form.goal.variant === "dialogue" && (
-                <QCard title="Conversation design" helper="Control turns, stop rules, and how ratings are captured.">
+                <QCard title="Conversation design" helper="Control turns, end rules, and how ratings are captured.">
                   <Typography gutterBottom>Max turns: {form.workflow.rm.dialogueTurns}</Typography>
                   <Slider min={2} max={12} step={1}
                           value={form.workflow.rm.dialogueTurns}
                           onChange={(_, v) => update(["workflow", "rm", "dialogueTurns"], v)} />
 
-                  <FormLabel sx={{ mt: 2 }}>Stop when…</FormLabel>
+                  <FormLabel sx={{ mt: 2 }}>End when…</FormLabel>
                   <RadioGroup value={form.workflow.rm.stopRule || "max_turns"}
                               onChange={(e) => update(["workflow", "rm", "stopRule"], e.target.value)}>
                     <FormControlLabel value="max_turns" control={<Radio />} label="Max turns reached" />
-                    <FormControlLabel value="annotator_ends" control={<Radio />} label="Annotator ends early (good enough)" />
+                    <FormControlLabel value="annotator_ends" control={<Radio />} label="Annotator ends early" />
                     <FormControlLabel value="model_refuses_twice" control={<Radio />} label="Model refuses twice" />
                   </RadioGroup>
 
-                  <FormLabel sx={{ mt: 2 }}>How should we collect ratings?</FormLabel>
+                  <FormLabel sx={{ mt: 2 }}>Collect ratings</FormLabel>
                   <RadioGroup value={form.workflow.rm.perTurn ? "per_turn" : "overall"}
                               onChange={(e) => update(["workflow", "rm", "perTurn"], e.target.value === "per_turn")}>
                     <FormControlLabel value="overall" control={<Radio />} label="One overall rating at the end" />
@@ -660,10 +1016,8 @@ export default function ProjectWizard() {
                              onChange={(e) => update(["workflow", "rm", "followupQuestion"], e.target.value)} />
                 </QCard>
               )}
-            </Grid>
 
-            <Grid item xs={12} md={6}>
-              <QCard title="Short nudge / guidance (optional)" helper="A single sentence to remind raters what “good” looks like.">
+              <QCard title="Short nudge / guidance (optional)">
                 <TextField
                   fullWidth multiline minRows={4}
                   value={form.workflow.sft.nudge}
@@ -672,11 +1026,50 @@ export default function ProjectWizard() {
                 />
               </QCard>
             </Grid>
+
+            {/* RIGHT: live preview tabs */}
+            <Grid item xs={12} md={6}>
+              <Paper variant="outlined" sx={{ p: 1.5, mb: 1 }}>
+                <Tabs value={previewTab} onChange={(_, v) => setPreviewTab(v)} variant="fullWidth">
+                  <Tab label="Rater view" />
+                  <Tab label="Summary" />
+                  <Tab label="AI Configure" />
+                </Tabs>
+              </Paper>
+
+              {previewTab === 0 && <RaterPreview />}
+              {previewTab === 1 && (
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  {summaryLines.map((l, i) => (
+                    <Typography key={i} variant="body2" sx={{ mb: 0.5 }}>{l}</Typography>
+                  ))}
+                </Paper>
+              )}
+              {previewTab === 2 && (
+                <Paper variant="outlined" sx={{ p: 2, display: "grid", gap: 1 }}>
+                  <TextField
+                    label="Describe your task (one sentence)"
+                    placeholder="e.g., Chat 4 turns, rate each turn, end if model refuses twice."
+                    value={aiText}
+                    onChange={(e) => setAiText(e.target.value)}
+                    multiline minRows={3}
+                  />
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Button variant="contained" onClick={applyAIConfigure} disabled={!aiText.trim()}>Generate & Apply</Button>
+                    <Button variant="text" onClick={() => setAiText("")}>Clear</Button>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary">
+                    Tip: Use “A/B”, “binary”, “1–5”, “dialogue 6 turns”, “per-turn ratings”, “tie”, “why”.
+                  </Typography>
+                </Paper>
+              )}
+            </Grid>
           </Grid>
         </Section>
       )}
 
-      {form.goal.main === "safety" && (
+      {/* Safety */}
+      {isSafety && (
         <Section title="Safety / policy labeling" sub="Pick labels and whether to include severity.">
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
@@ -684,16 +1077,19 @@ export default function ProjectWizard() {
                 <TextField
                   fullWidth label="Labels (comma separated)"
                   value={form.workflow.safety.labels.join(",")}
-                  onChange={(e) => update(["workflow", "safety", "labels"], e.target.value.split(",").map((x) => x.trim()).filter(Boolean))}
+                  onChange={(e) =>
+                    update(["workflow", "safety", "labels"],
+                      e.target.value.split(",").map((x) => x.trim()).filter(Boolean)
+                    )
+                  }
                 />
                 <FormControlLabel sx={{ mt: 1 }}
                   control={<Switch checked={form.workflow.safety.severity}
                                    onChange={(e) => update(["workflow", "safety", "severity"], e.target.checked)} />}
                   label="Enable severity scale" />
               </QCard>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <QCard title="Short nudge / guidance (optional)">
+
+              <QCard title="Short guidance (optional)">
                 <TextField
                   fullWidth multiline minRows={4}
                   value={form.workflow.sft.nudge}
@@ -702,11 +1098,47 @@ export default function ProjectWizard() {
                 />
               </QCard>
             </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Paper variant="outlined" sx={{ p: 1.5, mb: 1 }}>
+                <Tabs value={previewTab} onChange={(_, v) => setPreviewTab(v)} variant="fullWidth">
+                  <Tab label="Rater view" />
+                  <Tab label="Summary" />
+                  <Tab label="AI Configure" />
+                </Tabs>
+              </Paper>
+
+              {previewTab === 0 && <RaterPreview />}
+              {previewTab === 1 && (
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  {summaryLines.map((l, i) => (
+                    <Typography key={i} variant="body2" sx={{ mb: 0.5 }}>{l}</Typography>
+                  ))}
+                </Paper>
+              )}
+              {previewTab === 2 && (
+                <Paper variant="outlined" sx={{ p: 2, display: "grid", gap: 1 }}>
+                  <TextField
+                    label="Describe your safety task"
+                    placeholder="e.g., Label toxicity, harassment, hate; include severity."
+                    value={aiText}
+                    onChange={(e) => setAiText(e.target.value)}
+                    multiline minRows={3}
+                  />
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Button variant="contained" onClick={applyAIConfigure} disabled={!aiText.trim()}>Generate & Apply</Button>
+                    <Button variant="text" onClick={() => setAiText("")}>Clear</Button>
+                  </Box>
+                </Paper>
+              )}
+            </Grid>
           </Grid>
         </Section>
       )}
     </Box>
   );
+};
+
 
   /* ── STEP 4: People & Pay ─────────────────────────────────────────────── */
   const StepPeoplePay = () => (
