@@ -5,12 +5,14 @@ import {
   CircularProgress, Snackbar, Checkbox, FormGroup
 } from "@mui/material";
 
+import FlagDialog from "../common/FlagDialog";
+import SkipDialog from "../common/SkipDialog";
+
 const OPENAI_MODEL = "gpt-4o-mini";
 
 async function callOpenAI(messages) {
   const key = import.meta.env.VITE_OPENAI_KEY;
   if (!key) throw new Error("Missing VITE_OPENAI_KEY");
-  // For production: proxy through a backend to protect the key & avoid CORS.
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -57,6 +59,14 @@ export default function RedTeam({ task, onSubmit, onSkip, onFlag, meta }) {
     probeEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [probeTranscript, loading, awaitingRating]);
 
+  // dialogs
+  const [flagOpen, setFlagOpen] = useState(false);
+  const [skipOpen, setSkipOpen] = useState(false);
+  const openFlag = () => setFlagOpen(true);
+  const openSkip = () => setSkipOpen(true);
+  const handleFlagSubmit = (data) => { setFlagOpen(false); onFlag?.(data); };
+  const handleSkipSubmit = (data) => { setSkipOpen(false); onSkip?.(data); };
+
   const sendProbe = async () => {
     if (!probeInput.trim() || loading || awaitingRating) return;
     const userMsg = probeInput.trim();
@@ -85,7 +95,6 @@ export default function RedTeam({ task, onSubmit, onSkip, onFlag, meta }) {
       setNotes("");
       setAwaitingRating(true);
     } catch (e) {
-      // mock fallback
       setProbeTranscript(prev => {
         const idx = prev.length;
         const next = [...prev, { role: "assistant", content: "(mock) Safe refusal placeholder.", eval: null }];
@@ -122,7 +131,7 @@ export default function RedTeam({ task, onSubmit, onSkip, onFlag, meta }) {
     setRewardOpen(true);
     onSubmit({
       pairwise: { attack, preferred: choice || null },
-      probeTranscript: probeTranscript, // includes eval per assistant turn if saved
+      probeTranscript, // includes eval per assistant turn if saved
     });
   };
 
@@ -135,6 +144,20 @@ export default function RedTeam({ task, onSubmit, onSkip, onFlag, meta }) {
         </Typography>
       )}
 
+      {/* Policy / refusal hints */}
+      {task?.policyHint && (
+        <Alert severity="info" sx={{ mt: 1 }}>
+          {task.policyHint === "refusal_expected"
+            ? "Refusal expected: unsafe requests should be refused with brief rationale."
+            : `Policy hint: ${String(task.policyHint).replace(/_/g, " ")}`}
+        </Alert>
+      )}
+      {task?.refusalTemplate && !task?.policyHint && (
+        <Alert severity="info" sx={{ mt: 1 }}>
+          Refusal hint: {task.refusalTemplate}
+        </Alert>
+      )}
+
       <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 0.5 }}>
         Red-Teaming — Per-turn gated evaluation
       </Typography>
@@ -145,10 +168,12 @@ export default function RedTeam({ task, onSubmit, onSkip, onFlag, meta }) {
         <Tab value="probe" label="Live Probe (gated)" />
       </Tabs>
 
-      {/* Pairwise tab (unchanged logic) */}
+      {/* Pairwise tab */}
       {tab === "pairwise" && (
         <>
-          <Typography variant="body2" sx={{ mt: 1, whiteSpace: "pre-wrap" }}>{task.setup}</Typography>
+          {task.setup && (
+            <Typography variant="body2" sx={{ mt: 1, whiteSpace: "pre-wrap" }}>{task.setup}</Typography>
+          )}
 
           <Divider sx={{ my: 2 }} />
           <TextField
@@ -277,15 +302,30 @@ export default function RedTeam({ task, onSubmit, onSkip, onFlag, meta }) {
         </>
       )}
 
-      {/* Footer actions for whole task */}
+      {/* Footer actions */}
       <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
         <Button variant="contained" onClick={submitAll} disabled={loading || awaitingRating}>
           Finish & Submit
         </Button>
-        <Button onClick={onSkip}>Skip</Button>
-        <Button color="warning" onClick={onFlag}>Flag</Button>
+        <Button onClick={openSkip}>Skip</Button>
+        <Button color="warning" onClick={openFlag}>Flag</Button>
       </Stack>
 
+      {/* dialogs */}
+      <FlagDialog
+        open={flagOpen}
+        onClose={() => setFlagOpen(false)}
+        onSubmit={handleFlagSubmit}
+        defaultReason="other"
+      />
+      <SkipDialog
+        open={skipOpen}
+        onClose={() => setSkipOpen(false)}
+        onSubmit={handleSkipSubmit}
+        defaultReason="unclear"
+      />
+
+      {/* submit snackbar */}
       <Snackbar
         open={rewardOpen}
         autoHideDuration={1200}

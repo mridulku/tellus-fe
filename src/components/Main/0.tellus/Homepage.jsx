@@ -1,7 +1,7 @@
 // src/pages/Homepage.jsx
 import React from "react";
-import { Box, Container, Typography, Grid, Card, CardContent, Button } from "@mui/material";
-import DashboardIcon from "@mui/icons-material/Dashboard";
+ import { Box, Container, Typography, Grid, Card, CardContent, Button } from "@mui/material";
+ import { Link as RouterLink } from "react-router-dom";import DashboardIcon from "@mui/icons-material/Dashboard";
 import EditNoteIcon from "@mui/icons-material/EditNote";
 
 export default function Homepage() {
@@ -10,7 +10,7 @@ export default function Homepage() {
       <Container maxWidth="md">
         {/* Welcome Header */}
         <Typography variant="h3" align="center" gutterBottom sx={{ fontWeight: "bold" }}>
-          Welcome to Tellus Digital
+          Welcome to Telus Digital
         </Typography>
         <Typography variant="h6" align="center" color="text.secondary" paragraph>
           What do you want to access?
@@ -54,11 +54,8 @@ export default function Homepage() {
                   Explore analytics, monitor quality, and manage annotation pipelines.
                 </Typography>
                 <Button
-                  variant="contained"
-                  fullWidth
-                  color="secondary"
-                  size="large"
-                  href="/dashboard"
+                     component={RouterLink} to="/dashboard"
+   variant="contained" fullWidth color="secondary" size="large"
                 >
                   Go to Dashboard
                 </Button>
@@ -74,7 +71,7 @@ export default function Homepage() {
           display="block"
           sx={{ mt: 6, color: "text.disabled" }}
         >
-          © 2025 Tellus Digital
+          © 2025 Telus Digital
         </Typography>
       </Container>
     </Box>

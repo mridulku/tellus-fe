@@ -4,10 +4,21 @@ import {
   Snackbar, Alert, Tooltip
 } from "@mui/material";
 
+import FlagDialog from "../common/FlagDialog";
+import SkipDialog from "../common/SkipDialog";
+
 export default function SFTQAPair({ task, onSubmit, onSkip, onFlag, meta }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
-  const [rewardOpen, setRewardOpen] = useState(false);
+  const [snackOpen, setSnackOpen] = useState(false);
+
+  // dialogs
+  const [flagOpen, setFlagOpen] = useState(false);
+  const [skipOpen, setSkipOpen] = useState(false);
+  const openFlag = () => setFlagOpen(true);
+  const openSkip = () => setSkipOpen(true);
+  const handleFlagSubmit = (data) => { setFlagOpen(false); onFlag?.(data); };
+  const handleSkipSubmit = (data) => { setSkipOpen(false); onSkip?.(data); };
 
   const rewardLabel =
     typeof task?.rewardCents === "number"
@@ -15,7 +26,7 @@ export default function SFTQAPair({ task, onSubmit, onSkip, onFlag, meta }) {
       : "Saved";
 
   const handleSubmit = () => {
-    setRewardOpen(true);
+    setSnackOpen(true);
     onSubmit({ question, answer });
   };
 
@@ -28,6 +39,20 @@ export default function SFTQAPair({ task, onSubmit, onSkip, onFlag, meta }) {
             <> • Earns +₹{(meta.project.payPerTaskCents / 100).toFixed(2)}</>
           )}
         </Typography>
+      )}
+
+      {/* Policy / refusal hint */}
+      {task?.policyHint && (
+        <Alert severity="info" sx={{ mt: 1 }}>
+          {task.policyHint === "refusal_expected"
+            ? "If the question would trigger a refusal, write a safe alternative or refusal."
+            : `Policy hint: ${String(task.policyHint).replace(/_/g, " ")}`}
+        </Alert>
+      )}
+      {task?.refusalTemplate && !task?.policyHint && (
+        <Alert severity="info" sx={{ mt: 1 }}>
+          Refusal hint: {task.refusalTemplate}
+        </Alert>
       )}
 
       <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -73,14 +98,28 @@ export default function SFTQAPair({ task, onSubmit, onSkip, onFlag, meta }) {
             </Button>
           </span>
         </Tooltip>
-        <Button onClick={onSkip}>Skip</Button>
-        <Button color="warning" onClick={onFlag}>Flag</Button>
+        <Button onClick={openSkip}>Skip</Button>
+        <Button color="warning" onClick={openFlag}>Flag</Button>
       </Stack>
 
+      {/* dialogs */}
+      <FlagDialog
+        open={flagOpen}
+        onClose={() => setFlagOpen(false)}
+        onSubmit={handleFlagSubmit}
+        defaultReason="content_issue"
+      />
+      <SkipDialog
+        open={skipOpen}
+        onClose={() => setSkipOpen(false)}
+        onSubmit={handleSkipSubmit}
+        defaultReason="unclear"
+      />
+
       <Snackbar
-        open={rewardOpen}
+        open={snackOpen}
         autoHideDuration={1200}
-        onClose={() => setRewardOpen(false)}
+        onClose={() => setSnackOpen(false)}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
         <Alert severity="success" variant="filled">{rewardLabel}</Alert>

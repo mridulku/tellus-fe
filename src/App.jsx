@@ -22,7 +22,7 @@ import "slick-carousel/slick/slick-theme.css";
 
 import Homepage from "./components/Main/0.tellus/Homepage";   // ← add this
 
-import Dashboard from "./components/Main/0.tellus/Dashboard";
+import ProviderDashboard from "./components/Main/0.tellus/ProviderDashboard.jsx";
 
 
 import Annotator from "./components/Main/0.tellus/Annotator";
@@ -108,7 +108,7 @@ function App() {
 <Route path="/" element={<Homepage />} />
 <Route path="/neet"     element={<NEETUGLandingPage />} />
 <Route path="/annotator" element={<Annotator />} />
-<Route path="/dashboard" element={<Dashboard />} />
+<Route path="/dashboard" element={<ProviderDashboard />} />
 
 
 
@@ -163,14 +163,14 @@ function App() {
         <Route path="/planbrowser"            element={<PrivateRoute><PlanBrowser /></PrivateRoute>} />
         <Route path="/planfetcher"            element={<PrivateRoute><PlanFetcher /></PrivateRoute>} />
         <Route path="/stagetimeline"          element={<PrivateRoute><StageTimeline /></PrivateRoute>} />
-        <Route path="/dashboard"              element={<PrivateRoute><BooksViewer2 /></PrivateRoute>} />
+        <Route path="/books-dashboard"              element={<PrivateRoute><BooksViewer2 /></PrivateRoute>} />
         <Route path="/home"                   element={<PrivateRoute><Home /></PrivateRoute>} />
         <Route path="/promptmanager"          element={<PrivateRoute><PromptManager /></PrivateRoute>} />
         <Route path="/promptinput"            element={<PrivateRoute><PromptInput /></PrivateRoute>} />
         <Route path="/brainstorming"          element={<PrivateRoute><BrainstormingList /></PrivateRoute>} />
 
         {/* ─── catch-all → /neet ─── */}
-        <Route path="*" element={<Navigate to="/neet" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
 
       </Routes>
     </Router>

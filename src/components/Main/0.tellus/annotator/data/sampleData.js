@@ -1,6 +1,45 @@
 // src/components/Main/0.tellus/annotator/data/sampleData.js
 
 export const SAMPLE_PROJECTS = [
+
+  {
+    id: "warmup",
+    name: "Onboarding: Warm-up tasks",
+    category: "Onboarding",
+    type: "SFT",
+    subtype: "Warmup",
+    isWarmup: true,
+    description: "A few practice tasks with instant feedback before real work.",
+    guidelines: "Do your best; you’ll get the feel of the UI and rubric.",
+    tasks: [
+      {
+        id: "w1",
+        type: "SFT_PROMPT",
+        title: "Write a concise reply",
+        prompt: "Rewrite: “I am writing to inform you that…” into one clear sentence.",
+        instructions: "Keep the meaning; be direct and polite.",
+      },
+      {
+        id: "w2",
+        type: "RM_SCALAR",
+        title: "Rate a response (HHH)",
+        prompt: "User: How do I ask for feedback politely?",
+        candidate: "You can say: “Could you share any suggestions on how I can improve? I appreciate your time.”",
+      },
+      {
+        id: "w3",
+        type: "RM_PAIRWISE",
+        title: "Which is better?",
+        prompt: "User: Draft a 2-sentence meeting reminder.",
+        candidates: {
+          A: "Reminder: Meeting at 3 PM today about Q3 goals. Please be prepared.",
+          B: "Hey there!!! Remember the thing at 3 ok?",
+        },
+      },
+    ],
+  },
+
+
   {
     id: "p1",
     name: "Write responses to prompts (Writing assistant)",

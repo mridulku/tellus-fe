@@ -10,6 +10,7 @@ import {
   Tabs,
   Tab,
   Button,
+  Tooltip,
 } from "@mui/material";
 
 function currencyINR(cents = 0) {
@@ -67,7 +68,7 @@ export default function InstructionsRail({
 
   const extras = useMemo(() => {
     const arr = [];
-    // Policy/style defaults (optional; safe to customize later)
+    // Default policy/style tabs (can be overridden by project config if you add it later)
     arr.push({
       label: "Policy",
       content:
@@ -81,6 +82,14 @@ export default function InstructionsRail({
     return arr;
   }, []);
 
+  const hasExamples = Array.isArray(project?.examples) && project.examples.length > 0;
+
+  // Tab layout: [Guidelines, This Task, Rubrics, Shortcuts, (Examples?), ...extras]
+  const baseTabs = ["Guidelines", "This Task", "Rubrics", "Shortcuts"];
+  const allTabs = hasExamples ? [...baseTabs, "Examples", ...extras.map(e => e.label)] : [...baseTabs, ...extras.map(e => e.label)];
+  const examplesIndex = hasExamples ? baseTabs.length : -1;
+  const extrasStart = hasExamples ? baseTabs.length + 1 : baseTabs.length;
+
   return (
     <Card sx={{ position: { md: "sticky" }, top: { md: 88 } }}>
       <CardContent>
@@ -89,6 +98,10 @@ export default function InstructionsRail({
           {project?.category && <Chip size="small" label={project.category} />}
           {project?.type && <Chip size="small" label={project.type} />}
           {project?.subtype && <Chip size="small" label={project.subtype} />}
+          {/* Gamification indicator (opt-out visible) */}
+          {project?.gamification?.enabled === false && (
+            <Chip size="small" color="default" variant="outlined" label="Gamification OFF" />
+          )}
         </Stack>
 
         {/* Title & desc */}
@@ -99,7 +112,20 @@ export default function InstructionsRail({
           </Typography>
         )}
 
-        {/* Optional pay/time cues if present on project */}
+        {/* Meta/version chips: policyVersion, uiVersion, modelId (optional) */}
+        {(project?.policyVersion || project?.uiVersion || project?.modelId) && (
+          <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
+            {project?.policyVersion && (
+              <Chip size="small" color="info" variant="outlined" label={`Policy ${project.policyVersion}`} />
+            )}
+            <Chip size="small" color="info" variant="outlined" label={`UI ${project?.uiVersion || "annotator-0.1"}`} />
+            {project?.modelId && (
+              <Chip size="small" color="info" variant="outlined" label={`Model ${project.modelId}`} />
+            )}
+          </Stack>
+        )}
+
+        {/* Optional pay/time cues */}
         {(project?.payPerTaskCents || project?.avgMinutesPerTask) && (
           <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
             {project?.payPerTaskCents ? `≈ ${currencyINR(project.payPerTaskCents)}/task` : ""}
@@ -118,20 +144,18 @@ export default function InstructionsRail({
           scrollButtons="auto"
           sx={{ minHeight: 36, "& .MuiTab-root": { minHeight: 36 } }}
         >
-          <Tab label="Guidelines" />
-          <Tab label="This Task" />
-          <Tab label="Rubrics" />
-          <Tab label="Shortcuts" />
-          {extras.map((e, i) => <Tab key={i} label={e.label} />)}
+          {allTabs.map((label, i) => <Tab key={i} label={label} />)}
         </Tabs>
 
         <Box sx={{ mt: 1 }}>
+          {/* Guidelines */}
           {tab === 0 && (
             <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
               {project?.guidelines || "No guidelines provided."}
             </Typography>
           )}
 
+          {/* This Task */}
           {tab === 1 && (
             <>
               {task?.instructions ? (
@@ -146,12 +170,14 @@ export default function InstructionsRail({
             </>
           )}
 
+          {/* Rubrics */}
           {tab === 2 && (
             <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
               {getDefaultRubrics(project)}
             </Typography>
           )}
 
+          {/* Shortcuts */}
           {tab === 3 && (
             <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-wrap" }}>
               Keyboard shortcuts:
@@ -161,9 +187,31 @@ export default function InstructionsRail({
             </Typography>
           )}
 
-          {tab >= 4 && (
+          {/* Examples (optional) */}
+          {hasExamples && tab === examplesIndex && (
+            <Stack spacing={1.5}>
+              {(project.examples || []).slice(0, 3).map((ex, i) => (
+                <Box key={i} sx={{ p: 1, bgcolor: "grey.50", borderRadius: 1, border: "1px solid", borderColor: "divider" }}>
+                  <Typography variant="subtitle2">{ex.title || `Example ${i + 1}`}</Typography>
+                  {ex.input && (
+                    <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", mt: 0.5 }}>
+                      <strong>Input:</strong> {ex.input}
+                    </Typography>
+                  )}
+                  {ex.output && (
+                    <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", mt: 0.5 }}>
+                      <strong>Ideal:</strong> {ex.output}
+                    </Typography>
+                  )}
+                </Box>
+              ))}
+            </Stack>
+          )}
+
+          {/* Extra tabs (Policy, Style, ...) */}
+          {tab >= extrasStart && (
             <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-wrap" }}>
-              {extras[tab - 4]?.content}
+              {extras[tab - extrasStart]?.content}
             </Typography>
           )}
         </Box>
@@ -172,12 +220,16 @@ export default function InstructionsRail({
 
         {/* Progress + nav */}
         <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-          Progress: {idx + 1}/{total} • Completed: {doneCount}
+          Progress: {Math.min(idx + 1, total)}/{total} • Completed: {doneCount}
         </Typography>
         <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
           <Button size="small" onClick={onPrev} disabled={idx === 0}>Prev</Button>
-          <Button size="small" onClick={onNext} disabled={idx === total - 1}>Next</Button>
-          <Button size="small" variant="outlined" onClick={onExit}>Exit</Button>
+          <Button size="small" onClick={onNext} disabled={idx >= total - 1}>Next</Button>
+          <Tooltip title="Exit to Dashboard">
+            <span>
+              <Button size="small" variant="outlined" onClick={onExit}>Exit</Button>
+            </span>
+          </Tooltip>
         </Stack>
       </CardContent>
     </Card>
