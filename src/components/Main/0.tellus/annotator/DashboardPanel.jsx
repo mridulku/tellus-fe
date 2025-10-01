@@ -41,51 +41,61 @@ function dueInfo(p, nowTs) {
   return { text: `Due in ${fmtDuration(delta)}`, color: "default" };
 }
 
+// NEW: robust warm-up detector (works even if data wasn’t labeled)
+function isWarmupProject(p = {}) {
+  const rx = /warm.?up/i;
+  const byFlag = !!p.isWarmup;
+  const byName = rx.test(p.name || "");
+  const bySubtype = rx.test(p.subtype || "");
+  const byTags = Array.isArray(p.tags) && p.tags.some(t => rx.test(String(t)));
+  return byFlag || byName || bySubtype || byTags;
+}
+
 export default function DashboardPanel({
-  perProject,          // [{ id, name, description, remainingToday, plannedMinutes, plannedCents, doneTotal, total, dueAt/dueDate, priority, tags }]
-  today,               // { remainingTasks, plannedMinutes, plannedCents, earnedCentsToday }
-  onOpenProject,       // (projectId) => void
-  onStartToday,        // () => void
+  perProject = [],      // [{ id, name, description, remainingToday, plannedMinutes, plannedCents, doneTotal, total, dueAt/dueDate, priority, tags, ... }]
+  today = { remainingTasks: 0, plannedMinutes: 0, plannedCents: 0, earnedCentsToday: 0 },
+  onOpenProject,
+  onStartToday,
 }) {
   const now = useNow();
-
-  // Simple search only
   const [query, setQuery] = useState("");
 
-  // Filtered list (search by name/desc/tags)
+  // NEW: single filtered source used everywhere
+  const visibleProjects = useMemo(
+    () => perProject.filter(p => !isWarmupProject(p)),
+    [perProject]
+  );
+
+  // Search across visible projects
   const filtered = useMemo(() => {
-    return perProject
-      .filter(p => !p.isWarmup)
-      .filter(p => {
-        if (!query.trim()) return true;
-        const q = query.toLowerCase();
-        return (
-          p.name.toLowerCase().includes(q) ||
-          (p.description || "").toLowerCase().includes(q) ||
-          (p.tags || []).some(t => t.toLowerCase().includes(q))
-        );
-      });
-  }, [perProject, query]);
+    if (!query.trim()) return visibleProjects;
+    const q = query.toLowerCase();
+    return visibleProjects.filter(p =>
+      p.name?.toLowerCase().includes(q) ||
+      (p.description || "").toLowerCase().includes(q) ||
+      (p.tags || []).some(t => String(t).toLowerCase().includes(q))
+    );
+  }, [visibleProjects, query]);
 
   // Today’s plan (remaining > 0), sorted by priority then due date then remaining
   const todayPlan = useMemo(() => {
     const priRank = { High: 0, Med: 1, Low: 2 };
-    return perProject
-      .filter(p => !p.isWarmup && (p.remainingToday ?? 0) > 0)
-      .sort((a,b) => {
+    return visibleProjects
+      .filter(p => (p.remainingToday ?? 0) > 0)
+      .sort((a, b) => {
         const pa = priRank[a.priority || "Low"], pb = priRank[b.priority || "Low"];
         if (pa !== pb) return pa - pb;
         if (a.dueAt && b.dueAt) return new Date(a.dueAt) - new Date(b.dueAt);
         return (b.remainingToday ?? 0) - (a.remainingToday ?? 0);
       });
-  }, [perProject]);
+  }, [visibleProjects]);
 
   const currency = (cents) => `₹${(cents/100).toFixed(2)}`;
   const mins = (m) => `${m} min${m===1?"":"s"}`;
 
   return (
     <Box>
-      {/* Compact: Today at a glance */}
+      {/* Today at a glance */}
       <Card variant="outlined" sx={{ mb: 2 }}>
         <CardContent>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="center" justifyContent="space-between">
