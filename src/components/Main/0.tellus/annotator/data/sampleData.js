@@ -1,7 +1,6 @@
 // src/components/Main/0.tellus/annotator/data/sampleData.js
 
 export const SAMPLE_PROJECTS = [
-
   {
     id: "warmup",
     name: "Onboarding: Warm-up tasks",
@@ -14,11 +13,13 @@ export const SAMPLE_PROJECTS = [
     tasks: [
       {
         id: "w1",
-        type: "SFT_PROMPT",
+        type: "SFT",
+        sftMode: "PROMPT",
         title: "Write a concise reply",
         prompt: "Rewrite: “I am writing to inform you that…” into one clear sentence.",
         instructions: "Keep the meaning; be direct and polite.",
       },
+      // keep your RM warmups if you want; shown here for completeness:
       {
         id: "w2",
         type: "RM_SCALAR",
@@ -39,87 +40,84 @@ export const SAMPLE_PROJECTS = [
     ],
   },
 
-
+  // ==== SINGLE, UNIFIED SFT PROJECT ====
   {
-    id: "p1",
-    name: "Write responses to prompts (Writing assistant)",
+    id: "sft_unified",
+    name: "Supervised Fine-Tuning (Unified)",
     category: "Supervised Fine-Tuning",
     type: "SFT",
-    subtype: "PromptOnly",
-    mode: "WRITE",                    // NEW: WRITE | COMPARE | RATE | ATTACK
-    priority: "High",                 // NEW: High | Medium | Low
-    dueDate: "2025-10-05",            // NEW
-    dailyTarget: 6,                   // NEW
-    unread: true,                    // NEW
-    payPerTaskCents: 50,          // payout per completed task
-  avgMinutesPerTask: 3,         // time estimate
-  todayTarget: 8,               // how many tasks we expect user to do today for this project
-  dueAt: "2025-10-31",          // optional, for sorting/filter
-  priority: "High",             // "High" | "Med" | "Low"
-  tags: ["SFT","Writing"],      // for filter chips
-    description: "Write clean, helpful responses to user prompts following style guide.",
+    subtype: "Unified",
+    mode: "WRITE",
+    priority: "High",
+    dueDate: "2025-10-12",
+    dailyTarget: 8,
+    unread: true,
+    payPerTaskCents: 50,
+    avgMinutesPerTask: 3,
+    todayTarget: 8,
+    dueAt: "2025-10-31",
+    tags: ["SFT", "Writing"],
+    description:
+      "Single SFT project: some items ask you to write a response; others ask you to author both question and answer.",
     guidelines:
-      "Prefer clear, concise answers. Cite sources if given. Avoid speculation. If unsure, ask a clarifying question.\nNo PII, no unsafe content. Be polite and neutral.",
+      "Answers should be helpful, concise, and safe. For authoring, keep questions specific and answers self-contained.",
     tasks: [
+      // PROMPT → RESPONSE
       {
-        id: "p1_t1",
-        type: "SFT_PROMPT",
+        id: "sft_t1",
+        type: "SFT",
+        sftMode: "PROMPT",
         title: "Rewrite for clarity",
-        prompt: "Rewrite the following paragraph for clarity and concision:\n\n\"I am writing this mail in order to inform you that as per the previous discussion had on the last Friday, the deliverables would be due by end of next week, hopefully.\"",
+        prompt:
+          "Rewrite the following paragraph for clarity and concision:\n\n\"I am writing this mail in order to inform you that as per the previous discussion had on the last Friday, the deliverables would be due by end of next week, hopefully.\"",
         instructions: "Keep meaning; remove hedging; use direct language.",
-        
       },
       {
-        id: "p1_t2",
-        type: "SFT_PROMPT",
+        id: "sft_t2",
+        type: "SFT",
+        sftMode: "PROMPT",
         title: "Explain like I'm five",
         prompt: "Explain black holes to a 5-year-old.",
         instructions: "Use simple words; one short paragraph.",
       },
+
+      // AUTHOR Q&A
+      {
+        id: "sft_t3",
+        type: "SFT",
+        sftMode: "AUTHOR_QA",
+        title: "KB authoring",
+        topic: "Company travel policy",
+        instructions: "Author one good question and its ideal answer.",
+      },
+      {
+        id: "sft_t4",
+        type: "SFT",
+        sftMode: "AUTHOR_QA",
+        title: "KB authoring",
+        topic: "Expense reimbursements",
+        instructions: "Author one good question and its ideal answer.",
+      },
     ],
   },
-  {
-    id: "p2",
-    name: "Author QA pairs (Knowledge base)",
-    category: "Supervised Fine-Tuning",
-    type: "SFT",
-    subtype: "QAPair",
-    payPerTaskCents: 50,          // payout per completed task
-  avgMinutesPerTask: 3,         // time estimate
-  todayTarget: 8,               // how many tasks we expect user to do today for this project
-  dueAt: "2025-10-31",          // optional, for sorting/filter
-  priority: "High",             // "High" | "Med" | "Low"
-  tags: ["SFT","Writing"],      // for filter chips
-    mode: "WRITE",
-    priority: "Medium",
-    dueDate: "2025-10-12",
-    dailyTarget: 4,
-    unread: false,
-    description: "Create high-quality question–answer pairs for internal KB.",
-    guidelines:
-      "Questions should be specific. Answers should be factual, self-contained, and 2–5 sentences. Include context if needed.",
-    tasks: [
-      { id: "p2_t1", type: "SFT_QA", title: "KB authoring", topic: "Company travel policy", instructions: "One Q/A per task." },
-      { id: "p2_t2", type: "SFT_QA", title: "KB authoring", topic: "Expense reimbursements" },
-    ],
-  },
+
+  // Keep RM projects as-is
   {
     id: "p3",
     name: "Choose better of two answers (Helpfulness)",
     category: "Reward Modeling",
     type: "RM",
     subtype: "Pairwise",
-    payPerTaskCents: 50,          // payout per completed task
-  avgMinutesPerTask: 3,         // time estimate
-  todayTarget: 8,               // how many tasks we expect user to do today for this project
-  dueAt: "2025-10-31",          // optional, for sorting/filter
-  priority: "High",             // "High" | "Med" | "Low"
-  tags: ["SFT","Writing"],      // for filter chips
     mode: "COMPARE",
     priority: "High",
     dueDate: "2025-10-03",
     dailyTarget: 12,
     unread: false,
+    payPerTaskCents: 50,
+    avgMinutesPerTask: 3,
+    todayTarget: 8,
+    dueAt: "2025-10-31",
+    tags: ["RM", "Comparisons"],
     description: "Choose the more helpful, honest answer between A and B.",
     guidelines:
       "Prefer responses that are helpful, honest, and harmless. Penalize hallucinations and overconfident wrong answers. Refuse unsafe queries politely.",
@@ -152,20 +150,18 @@ export const SAMPLE_PROJECTS = [
     category: "Reward Modeling",
     type: "RM",
     subtype: "Scalar",
-    payPerTaskCents: 50,          // payout per completed task
-  avgMinutesPerTask: 3,         // time estimate
-  todayTarget: 8,               // how many tasks we expect user to do today for this project
-  dueAt: "2025-10-31",          // optional, for sorting/filter
-  priority: "High",             // "High" | "Med" | "Low"
-  tags: ["SFT","Writing"],      // for filter chips
     mode: "RATE",
     priority: "Low",
     dueDate: "2025-10-20",
     dailyTarget: 10,
     unread: false,
+    payPerTaskCents: 50,
+    avgMinutesPerTask: 3,
+    todayTarget: 8,
+    dueAt: "2025-10-31",
+    tags: ["RM", "Likert"],
     description: "Rate one response on a 1–7 Likert for helpfulness, harmlessness, honesty.",
-    guidelines:
-      "7 = excellent; 1 = very poor. Consider accuracy, completeness, tone, and safety.",
+    guidelines: "7 = excellent; 1 = very poor. Consider accuracy, completeness, tone, and safety.",
     tasks: [
       {
         id: "p4_t1",
@@ -180,12 +176,6 @@ export const SAMPLE_PROJECTS = [
   {
     id: "p5",
     name: "Rate multi-turn chat (per-turn)",
-    payPerTaskCents: 50,          // payout per completed task
-  avgMinutesPerTask: 3,         // time estimate
-  todayTarget: 8,               // how many tasks we expect user to do today for this project
-  dueAt: "2025-10-31",          // optional, for sorting/filter
-  priority: "High",             // "High" | "Med" | "Low"
-  tags: ["SFT","Writing"],      // for filter chips
     category: "Reward Modeling",
     type: "RM",
     subtype: "MultiTurn",
@@ -194,9 +184,13 @@ export const SAMPLE_PROJECTS = [
     dueDate: "2025-10-10",
     dailyTarget: 5,
     unread: true,
+    payPerTaskCents: 50,
+    avgMinutesPerTask: 3,
+    todayTarget: 8,
+    dueAt: "2025-10-31",
+    tags: ["RM", "Dialogue"],
     description: "Rate each assistant turn for helpfulness & harmlessness.",
-    guidelines:
-      "Consider context carry-over. Penalize derailment or unsafe advice.",
+    guidelines: "Consider context carry-over. Penalize derailment or unsafe advice.",
     tasks: [
       {
         id: "p5_t1",
@@ -215,21 +209,19 @@ export const SAMPLE_PROJECTS = [
     name: "Try to elicit unsafe behavior (more harmful)",
     category: "Red-Team",
     type: "RM",
-    payPerTaskCents: 50,          // payout per completed task
-  avgMinutesPerTask: 3,         // time estimate
-  todayTarget: 8,               // how many tasks we expect user to do today for this project
-  dueAt: "2025-10-31",          // optional, for sorting/filter
-  priority: "High",             // "High" | "Med" | "Low"
-  tags: ["SFT","Writing"],      // for filter chips
     subtype: "RedTeam",
     mode: "ATTACK",
     priority: "High",
     dueDate: "2025-10-06",
     dailyTarget: 8,
     unread: false,
+    payPerTaskCents: 50,
+    avgMinutesPerTask: 3,
+    todayTarget: 8,
+    dueAt: "2025-10-31",
+    tags: ["RM", "RedTeam"],
     description: "Attempt to elicit unsafe behavior; pick the more harmful response.",
-    guidelines:
-      "Try jailbreaks but never write actionable harmful content yourself. If both are safe, pick ‘Tie’.",
+    guidelines: "Try jailbreaks but never write actionable harmful content yourself. If both are safe, pick ‘Tie’.",
     tasks: [
       {
         id: "p6_t1",

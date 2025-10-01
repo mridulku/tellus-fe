@@ -10,12 +10,12 @@ import {
   Alert,
   Button,
   Snackbar,
+  LinearProgress,
 } from "@mui/material";
 import InstructionsRail from "./InstructionsRail";
 
 // Task UIs
-import SFTPrompt from "./tasks/SFTPrompt";
-import SFTQAPair from "./tasks/SFTQAPair";
+import SFTTask from "./tasks/SFTTask";
 import RMPairwise from "./tasks/RMPairwise";
 import RMScalar from "./tasks/RMScalar";
 import RMMultiTurn from "./tasks/RMMultiTurn";
@@ -43,12 +43,18 @@ function evaluateGold(task, payload) {
       const o = payload?.scores?.honest ?? 0;
       return [h, s, o].every((v) => v >= min);
     }
-    if (task.type === "SFT_PROMPT") {
-      const must = (task?.gold?.rubric?.mustInclude || "").toLowerCase();
-      if (!must) return null;
-      const txt = (payload?.response || "").toLowerCase();
-      return txt.includes(must);
-    }
+      if (task.type === "SFT") {
+     const mode = task?.sftMode || (task?.prompt ? "PROMPT" : "AUTHOR_QA");
+     const must = (task?.gold?.rubric?.mustInclude || "").toLowerCase();
+     if (!must) return null;
+     if (mode === "PROMPT") {
+       const txt = (payload?.response || "").toLowerCase();
+       return txt.includes(must);
+     }
+     // AUTHOR_QA: simple check on answer; you can extend to question if needed
+     const ans = (payload?.answer || "").toLowerCase();
+     return ans.includes(must);
+   }
   } catch {
     return null;
   }
@@ -218,10 +224,7 @@ export default function TaskPlayer({
       onFlag: (payload) => flagAndAdvance(payload),
     };
     switch (task.type) {
-      case "SFT_PROMPT":
-        return <SFTPrompt {...common} />;
-      case "SFT_QA":
-        return <SFTQAPair {...common} />;
+       case "SFT":        return <SFTTask {...common} />;
       case "RM_PAIRWISE":
         return <RMPairwise {...common} />;
       case "RM_SCALAR":
@@ -255,30 +258,35 @@ export default function TaskPlayer({
       <Grid item xs={12} md={8} lg={9}>
         {/* In-session HUD */}
         <Card sx={{ mb: 2 }}>
-          <CardContent>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="center" justifyContent="space-between">
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap" }}>
-                <Chip size="small" color="primary" label={`Task ${Math.min(idx + 1, tasks.length)}/${tasks.length}`} />
-                <Chip size="small" label={`Completed: ${doneCount}`} />
-                {task?.isGold && <Chip size="small" color="warning" label="Calibration" />}
-              </Stack>
-
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="center">
-                <Typography variant="body2" color="text.secondary">
-                  Today: {doneToday}/{todayTarget || "—"}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Earned today: ₹{(earnedToday / 100).toFixed(2)}
-                </Typography>
-                {typeof project?.payPerTaskCents === "number" && (
-                  <Typography variant="caption" color="text.secondary">
-                    +₹{(project.payPerTaskCents / 100).toFixed(2)} / task
-                  </Typography>
-                )}
-              </Stack>
-            </Stack>
-          </CardContent>
-        </Card>
+  <CardContent>
+    <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems="center" justifyContent="space-between">
+      <Box sx={{ flex: 1, minWidth: 200 }}>
+        <Typography variant="body2" color="text.secondary">
+          Task {Math.min(idx + 1, tasks.length)} of {tasks.length}
+        </Typography>
+        <Box sx={{ mt: 0.5 }}>
+          <LinearProgress
+            variant="determinate"
+            value={tasks.length ? Math.round(((idx + 1) / tasks.length) * 100) : 0}
+          />
+        </Box>
+      </Box>
+      <Stack direction="row" spacing={2} alignItems="center">
+        <Typography variant="body2" color="text.secondary">
+          Today: {doneToday}/{todayTarget || "—"}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Earned today: ₹{(earnedToday / 100).toFixed(2)}
+        </Typography>
+        {typeof project?.payPerTaskCents === "number" && (
+          <Typography variant="caption" color="text.secondary">
+            +₹{(project.payPerTaskCents / 100).toFixed(2)} / task
+          </Typography>
+        )}
+      </Stack>
+    </Stack>
+  </CardContent>
+</Card>
 
         {/* Policy hint banners (refusal expected / sensitive reveal) */}
         {task?.policyHint === "refusal_expected" && (

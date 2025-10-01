@@ -1,345 +1,215 @@
 // src/components/Main/0.tellus/annotator/InvitesAndTraining.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Box, Typography, Card, CardContent, Stack, Chip, Button,
-  Grid, Divider, Dialog, DialogTitle, DialogContent, DialogActions,
-  LinearProgress, TextField, Checkbox, FormControlLabel, Snackbar, Alert
+  Box, Typography, Card, CardContent, Stack, Button,
+  Grid, Divider, LinearProgress, Checkbox, FormControlLabel,
+  Snackbar, Alert
 } from "@mui/material";
 
-const LS_KEY = "annotator.invites.v1";
+const LS_INVITES = "annotator.invites.v2";
+const LS_TRAINING = "annotator.mandatoryTraining.v1";
 
-const seedInvites = (projects=[]) => {
-  // map a few existing SAMPLE_PROJECTS ids if available
+function fmtINR(centsOrRupees, isCents = true) {
+  const rupees = isCents ? (Number(centsOrRupees || 0) / 100) : Number(centsOrRupees || 0);
+  return `₹${rupees.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+}
+function fmtDurationFromMinutes(totalMins = 0) {
+  const m = Math.max(0, Math.round(totalMins));
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  if (h === 0) return `${mm} min`;
+  if (mm === 0) return `${h} hr`;
+  return `${h} hr ${mm} min`;
+}
+
+// Build a very small, clean invite list from projects (demo-friendly)
+const seedInvites = (projects = []) => {
   const byId = Object.fromEntries(projects.map(p => [p.id, p]));
-  const now = Date.now();
-  const day = 24*60*60*1000;
+  const pick = (id, fallbackName, fallbackPayCents, fallbackMins) => {
+    const p = byId[id];
+    const tasksCount = p?.tasks?.length ?? 20; // fallback demo count
+    return {
+      id: `inv_${id || Math.random().toString(36).slice(2)}`,
+      projectId: id || `demo_${Math.random().toString(36).slice(2)}`,
+      name: p?.name || fallbackName,
+      payPerTaskCents: p?.payPerTaskCents ?? fallbackPayCents,
+      avgMinutesPerTask: p?.avgMinutesPerTask ?? fallbackMins,
+      tasksCount,              // <- key number users care about
+      status: "pending",       // pending | accepted | declined
+    };
+  };
 
   return [
-    {
-      id: "inv1",
-      projectId: "p3",
-      projectName: byId["p3"]?.name || "Choose better of two answers (Helpfulness)",
-      payPerTaskCents: byId["p3"]?.payPerTaskCents ?? 50,
-      avgMinutesPerTask: byId["p3"]?.avgMinutesPerTask ?? 3,
-      taskTypes: ["RM_PAIRWISE"],
-      cognitiveLoad: "Medium",
-      requiresTraining: false,
-      expiresAt: new Date(now + 2*day).toISOString(),
-      status: "pending",
-      training: { steps: [], completed: true },
-    },
-    {
-      id: "inv2",
-      projectId: "p6",
-      projectName: byId["p6"]?.name || "Try to elicit unsafe behavior (more harmful)",
-      payPerTaskCents: byId["p6"]?.payPerTaskCents ?? 60,
-      avgMinutesPerTask: byId["p6"]?.avgMinutesPerTask ?? 4,
-      taskTypes: ["RED_TEAM", "RM_PAIRWISE"],
-      cognitiveLoad: "High",
-      requiresTraining: true,
-      expiresAt: new Date(now + 1*day + 4*60*60*1000).toISOString(), // 1 day + 4h
-      status: "pending",
-      training: {
-        completed: false,
-        steps: [
-          { id: "t1", label: "Watch 3-min safety intro video", done: false },
-          { id: "t2", label: "Read project guideline doc", done: false },
-          { id: "t3", label: "Complete 2 sample items", done: false },
-        ],
-      },
-    },
-    {
-      id: "inv3",
-      projectId: "p4",
-      projectName: byId["p4"]?.name || "Rate one response (HHH Likert)",
-      payPerTaskCents: byId["p4"]?.payPerTaskCents ?? 45,
-      avgMinutesPerTask: byId["p4"]?.avgMinutesPerTask ?? 2,
-      taskTypes: ["RM_SCALAR"],
-      cognitiveLoad: "Low",
-      requiresTraining: false,
-      expiresAt: new Date(now - 6*60*60*1000).toISOString(), // expired 6h ago
-      status: "pending",
-      training: { steps: [], completed: true },
-    },
+    pick("p1", "Write responses to prompts", 50, 3),
+    pick("p3", "Choose better of two answers", 50, 3),
+    pick("p4", "Rate one response (1–7)", 45, 2),
   ];
 };
 
-function centsToINR(cents) {
-  return `₹${(cents/100).toFixed(2)}`;
+// ---- Mandatory training (global, simple) -------------------------------
+const DEFAULT_TRAINING = {
+  steps: [
+    { id: "s1", label: "Read the 1-page quickstart", done: false },
+    { id: "s2", label: "Watch the 2-min intro", done: false },
+    { id: "s3", label: "Do 2 sample tasks", done: false },
+  ],
+  completed: false,
+};
+function loadTraining() {
+  try { return { ...DEFAULT_TRAINING, ...(JSON.parse(localStorage.getItem(LS_TRAINING) || "{}")) }; }
+  catch { return DEFAULT_TRAINING; }
 }
-function timeLeftLabel(iso) {
-  const ms = new Date(iso).getTime() - Date.now();
-  if (ms <= 0) return "Expired";
-  const h = Math.floor(ms/3600000);
-  const m = Math.floor((ms%3600000)/60000);
-  if (h > 24) {
-    const d = Math.floor(h/24);
-    return `${d}d ${h%24}h left`;
-  }
-  return `${h}h ${m}m left`;
+function saveTraining(t) {
+  try { localStorage.setItem(LS_TRAINING, JSON.stringify(t)); } catch {}
 }
 
+// ---- Component ----------------------------------------------------------
 export default function InvitesAndTraining({ projects = [], onOpenProject }) {
   const [toast, setToast] = useState({ open: false, msg: "", severity: "success" });
 
-  // Load / persist invites
+  // Global mandatory training
+  const [training, setTraining] = useState(loadTraining());
+  const stepsDone = training.steps.filter(s => s.done).length;
+  const trainingPct = Math.round(100 * stepsDone / training.steps.length);
+  const trainingComplete = training.completed || (training.steps.length > 0 && stepsDone === training.steps.length);
+
+  const toggleStep = (id) => {
+    setTraining(curr => {
+      const steps = curr.steps.map(s => s.id === id ? { ...s, done: !s.done } : s);
+      const completed = steps.every(s => s.done);
+      const next = { ...curr, steps, completed };
+      saveTraining(next);
+      return next;
+    });
+  };
+  const markTrainingComplete = () => {
+    setTraining(curr => {
+      const next = { ...curr, completed: true, steps: curr.steps.map(s => ({ ...s, done: true })) };
+      saveTraining(next);
+      setToast({ open: true, msg: "Training completed. You can now view & accept projects.", severity: "success" });
+      return next;
+    });
+  };
+
+  // Invites
   const [invites, setInvites] = useState(() => {
     try {
-      const raw = localStorage.getItem(LS_KEY);
+      const raw = localStorage.getItem(LS_INVITES);
       if (raw) return JSON.parse(raw);
     } catch {}
     return seedInvites(projects);
   });
   useEffect(() => {
-    localStorage.setItem(LS_KEY, JSON.stringify(invites));
+    localStorage.setItem(LS_INVITES, JSON.stringify(invites));
   }, [invites]);
-
-  // Dialogs
-  const [preview, setPreview] = useState(null); // invite
-  const [training, setTraining] = useState(null); // invite requiring training
-
-  // Derived buckets
-  const withExpiry = useMemo(() => {
-    return invites.map(i => {
-      const expired = Date.now() > new Date(i.expiresAt).getTime();
-      return { ...i, expired };
-    });
-  }, [invites]);
-
-  const pending = withExpiry.filter(i => i.status === "pending" && !i.expired);
-  const expired = withExpiry.filter(i => i.status === "pending" && i.expired);
-  const accepted = withExpiry.filter(i => i.status === "accepted");
-  const declined = withExpiry.filter(i => i.status === "declined");
-
-  const projectById = useMemo(() => Object.fromEntries(projects.map(p => [p.id, p])), [projects]);
 
   const accept = (id) => {
-    setInvites(curr => curr.map(i => {
-      if (i.id !== id) return i;
-      if (Date.now() > new Date(i.expiresAt).getTime()) {
-        setToast({ open: true, msg: "Invitation expired.", severity: "warning" });
-        return i;
-      }
-      const next = { ...i, status: "accepted" };
-      setToast({ open: true, msg: "Project accepted.", severity: "success" });
-      return next;
-    }));
+    setInvites(list => list.map(i => i.id === id ? { ...i, status: "accepted" } : i));
+    setToast({ open: true, msg: "Project accepted.", severity: "success" });
   };
   const decline = (id) => {
-    setInvites(curr => curr.map(i => i.id === id ? { ...i, status: "declined" } : i));
+    setInvites(list => list.map(i => i.id === id ? { ...i, status: "declined" } : i));
     setToast({ open: true, msg: "Invitation declined.", severity: "info" });
   };
 
-  const toggleStep = (invId, stepId) => {
-    setInvites(curr => curr.map(i => {
-      if (i.id !== invId) return i;
-      const steps = (i.training?.steps || []).map(s => s.id === stepId ? { ...s, done: !s.done } : s);
-      const completed = steps.length > 0 && steps.every(s => s.done);
-      return { ...i, training: { ...i.training, steps, completed } };
-    }));
-  };
+  const pending = useMemo(() => invites.filter(i => i.status === "pending"), [invites]);
+  const accepted = useMemo(() => invites.filter(i => i.status === "accepted"), [invites]);
 
-  const markTrainingComplete = (invId) => {
-    setInvites(curr => curr.map(i => i.id === invId
-      ? { ...i, training: { ...(i.training||{}), completed: true, steps: (i.training?.steps||[]).map(s => ({...s, done: true})) } }
-      : i
-    ));
-    setToast({ open: true, msg: "Training marked complete.", severity: "success" });
-  };
+  // Compute user-facing numbers
+  const inviteStats = (i) => {
+    const count = Math.max(0, Number(i.tasksCount || 0));
+    const perTaskCents = Number(i.payPerTaskCents || 0);
+    const minsPerTask = Number(i.avgMinutesPerTask || 0);
 
-  const canStart = (i) => {
-    if (i.status !== "accepted") return false;
-    if (!i.requiresTraining) return true;
-    return !!i.training?.completed;
-  };
+    const totalPayoutINR = perTaskCents * count / 100;
+    const totalMinutes = minsPerTask * count;
 
-  const PreviewDialog = () => {
-    if (!preview) return null;
-    const p = projectById[preview.projectId];
-    return (
-      <Dialog open onClose={() => setPreview(null)} maxWidth="md" fullWidth>
-        <DialogTitle>Project preview</DialogTitle>
-        <DialogContent dividers>
-          <Typography variant="h6">{preview.projectName}</Typography>
-          <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
-            <Chip size="small" label={preview.cognitiveLoad + " load"} />
-            {preview.taskTypes.map(t => <Chip key={t} size="small" label={t} />)}
-          </Stack>
-          <Typography variant="body2" sx={{ mt: 1 }}>
-            ≈ {centsToINR(preview.payPerTaskCents)}/task • ~{preview.avgMinutesPerTask} min/task
-          </Typography>
-
-          <Divider sx={{ my: 2 }} />
-
-          {!p ? (
-            <Typography variant="body2" color="text.secondary">
-              Sample preview (no task data available in this demo).
-            </Typography>
-          ) : (
-            <>
-              <Typography variant="subtitle2">What you’ll do</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                {p.description}
-              </Typography>
-              <Typography variant="subtitle2" sx={{ mt: 1 }}>Example tasks</Typography>
-              {(p.tasks || []).slice(0, 2).map(t => (
-                <Card key={t.id} variant="outlined" sx={{ my: 1 }}>
-                  <CardContent>
-                    <Typography variant="body2"><b>{t.title || t.type}</b></Typography>
-                    {t.prompt && (
-                      <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "pre-wrap", mt: 0.5 }}>
-                        {t.prompt.slice(0, 200)}{t.prompt.length > 200 ? "…" : ""}
-                      </Typography>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPreview(null)}>Close</Button>
-          <Button variant="contained" onClick={() => { setPreview(null); accept(preview.id); }}>
-            Accept
-          </Button>
-        </DialogActions>
-      </Dialog>
-    );
-  };
-
-  const TrainingDialog = () => {
-    if (!training) return null;
-    const i = invites.find(x => x.id === training) || null;
-    if (!i) return null;
-    const steps = i.training?.steps || [];
-
-    const pct = steps.length ? Math.round(100 * steps.filter(s => s.done).length / steps.length) : (i.training?.completed ? 100 : 0);
-
-    return (
-      <Dialog open onClose={() => setTraining(null)} maxWidth="sm" fullWidth>
-        <DialogTitle>Training — {i.projectName}</DialogTitle>
-        <DialogContent dividers>
-          {steps.length > 0 ? (
-            <>
-              <Typography variant="body2" color="text.secondary">
-                Complete all steps below, then mark training complete to unlock tasks.
-              </Typography>
-              <LinearProgress variant="determinate" value={pct} sx={{ my: 2 }} />
-              <Stack spacing={1}>
-                {steps.map((s) => (
-                  <Card key={s.id} variant="outlined">
-                    <CardContent sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={!!s.done}
-                            onChange={() => toggleStep(i.id, s.id)}
-                          />
-                        }
-                        label={s.label}
-                        sx={{ flex: 1, m: 0 }}
-                      />
-                      <Button size="small" onClick={() => toggleStep(i.id, s.id)}>
-                        {s.done ? "Undo" : "Mark done"}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
-              </Stack>
-            </>
-          ) : (
-            <Typography variant="body2" color="text.secondary">
-              No per-step training listed; you can mark training complete.
-            </Typography>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setTraining(null)}>Close</Button>
-          <Button variant="contained" onClick={() => { markTrainingComplete(i.id); }}>
-            Mark training complete
-          </Button>
-        </DialogActions>
-      </Dialog>
-    );
+    return {
+      tasks: count,
+      perTask: fmtINR(perTaskCents),                 // e.g., ₹0.50
+      totalPayout: fmtINR(totalPayoutINR, false),    // e.g., ₹500
+      totalTime: fmtDurationFromMinutes(totalMinutes)
+    };
   };
 
   const InviteCard = ({ inv }) => {
-    const expiredLbl = timeLeftLabel(inv.expiresAt);
-    const chips = (
-      <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap" }}>
-        <Chip size="small" label={inv.cognitiveLoad + " load"} />
-        {inv.taskTypes.map(t => <Chip key={t} size="small" label={t} />)}
-        {inv.requiresTraining && <Chip size="small" color={inv.training?.completed ? "success" : "warning"} label={inv.training?.completed ? "Training done" : "Training required"} />}
-        {inv.expired && <Chip size="small" color="error" label="Expired" />}
-      </Stack>
-    );
-
+    const s = inviteStats(inv);
     return (
       <Card variant="outlined">
         <CardContent>
-          <Stack direction={{ xs:"column", md:"row" }} spacing={1} alignItems="flex-start">
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems="flex-start">
             <Box sx={{ flex: 1 }}>
               <Typography variant="subtitle2" color="text.secondary">Invitation</Typography>
-              <Typography variant="h6">{inv.projectName}</Typography>
-              {chips}
-              <Typography variant="body2" sx={{ mt: 0.5 }}>
-                ≈ {centsToINR(inv.payPerTaskCents)}/task • ~{inv.avgMinutesPerTask} min/task
-              </Typography>
-              <Typography variant="caption" color={inv.expired ? "error.main" : "text.secondary"} sx={{ display: "block", mt: 0.5 }}>
-                {expiredLbl}
-              </Typography>
+              <Typography variant="h6">{inv.name}</Typography>
+
+              <Grid container spacing={1} sx={{ mt: 0.5 }}>
+                <Grid item xs={12} sm={6} md="auto">
+                  <Typography variant="body2"><b>{s.tasks}</b> tasks</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6} md="auto">
+                  <Typography variant="body2">≈ <b>{s.totalPayout}</b> total</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6} md="auto">
+                  <Typography variant="body2">{s.perTask}/task</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6} md="auto">
+                  <Typography variant="body2">~ {s.totalTime}</Typography>
+                </Grid>
+              </Grid>
             </Box>
+
             <Stack direction="row" spacing={1}>
-              <Button size="small" onClick={() => setPreview(inv)}>Preview</Button>
-              <Button
-                size="small"
-                variant="contained"
-                disabled={inv.expired}
-                onClick={() => accept(inv.id)}
-              >
+              <Button size="small" variant="contained" onClick={() => accept(inv.id)} disabled={!trainingComplete}>
                 Accept
               </Button>
-              <Button size="small" color="inherit" onClick={() => decline(inv.id)}>Decline</Button>
+              <Button size="small" color="inherit" onClick={() => decline(inv.id)} disabled={!trainingComplete}>
+                Decline
+              </Button>
             </Stack>
           </Stack>
+          {!trainingComplete && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+              Complete training above to accept/decline.
+            </Typography>
+          )}
         </CardContent>
       </Card>
     );
   };
 
-  const AcceptedRow = ({ inv }) => {
-    const ready = canStart(inv);
-    const p = projectById[inv.projectId];
+  const AcceptedCard = ({ inv }) => {
+    const s = inviteStats(inv);
+    // If the project exists, we can open it
+    const projectExists = projects.some(p => p.id === inv.projectId);
     return (
       <Card variant="outlined">
         <CardContent>
-          <Stack direction={{ xs:"column", md:"row" }} spacing={1} alignItems="center">
+          <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems="center">
             <Box sx={{ flex: 1 }}>
               <Typography variant="subtitle2" color="text.secondary">Accepted</Typography>
-              <Typography variant="h6">{inv.projectName}</Typography>
-              <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", mt: 0.5 }}>
-                {inv.requiresTraining && (
-                  <Chip
-                    size="small"
-                    color={inv.training?.completed ? "success" : "warning"}
-                    label={inv.training?.completed ? "Training complete" : "Training required"}
-                  />
-                )}
-                <Chip size="small" label={`≈ ${centsToINR(inv.payPerTaskCents)}/task`} />
-              </Stack>
+              <Typography variant="h6">{inv.name}</Typography>
+              <Grid container spacing={1} sx={{ mt: 0.5 }}>
+                <Grid item xs={12} sm={6} md="auto">
+                  <Typography variant="body2"><b>{s.tasks}</b> tasks</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6} md="auto">
+                  <Typography variant="body2">≈ <b>{s.totalPayout}</b> total</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6} md="auto">
+                  <Typography variant="body2">{s.perTask}/task</Typography>
+                </Grid>
+                <Grid item xs={12} sm={6} md="auto">
+                  <Typography variant="body2">~ {s.totalTime}</Typography>
+                </Grid>
+              </Grid>
             </Box>
-            {!inv.training?.completed && inv.requiresTraining && (
-              <Button size="small" variant="outlined" onClick={() => setTraining(inv.id)}>
-                Start training
-              </Button>
-            )}
             <Button
               size="small"
               variant="contained"
-              disabled={!ready || !p}
               onClick={() => onOpenProject?.(inv.projectId)}
+              disabled={!projectExists}
             >
-              {p ? "Open project" : "Start (demo)"}
+              {projectExists ? "Open project" : "Start (demo)"}
             </Button>
           </Stack>
         </CardContent>
@@ -351,62 +221,56 @@ export default function InvitesAndTraining({ projects = [], onOpenProject }) {
     <Box>
       <Typography variant="h5" gutterBottom>Invites & Training</Typography>
 
-      {/* Pending invites */}
-      <Typography variant="subtitle1" sx={{ mt: 1, mb: 1 }}>Pending invitations</Typography>
-      <Stack spacing={1.5}>
+      {/* 1) Mandatory training (global gate) */}
+      <Card variant="outlined" sx={{ mb: 2 }}>
+        <CardContent>
+          <Typography variant="subtitle1">Mandatory training</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Please complete this short training to unlock project invitations.
+          </Typography>
+          <LinearProgress variant="determinate" value={trainingPct} sx={{ my: 1 }} />
+          <Stack spacing={1} sx={{ mt: 1 }}>
+            {training.steps.map(s => (
+              <FormControlLabel
+                key={s.id}
+                control={<Checkbox checked={!!s.done} onChange={() => toggleStep(s.id)} />}
+                label={s.label}
+              />
+            ))}
+          </Stack>
+          <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+            <Button
+              variant="contained"
+              onClick={markTrainingComplete}
+              disabled={trainingComplete}
+            >
+              {trainingComplete ? "Training completed" : "Mark training complete"}
+            </Button>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      {/* 2) Invitations (simple, money + time only) */}
+      <Typography variant="subtitle1" sx={{ mb: 1 }}>Project invitations</Typography>
+      <Stack spacing={1.5} sx={{ opacity: trainingComplete ? 1 : 0.6 }}>
         {pending.length === 0 ? (
           <Card variant="outlined"><CardContent>
-            <Typography variant="body2" color="text.secondary">No pending invitations.</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {trainingComplete ? "No pending invitations right now." : "Complete training to see invitations."}
+            </Typography>
           </CardContent></Card>
-        ) : pending.map(inv => <InviteCard key={inv.id} inv={{ ...inv, expired: false }} />)}
+        ) : pending.map(inv => <InviteCard key={inv.id} inv={inv} />)}
       </Stack>
 
-      {/* Accepted */}
+      {/* 3) Accepted projects */}
       <Typography variant="subtitle1" sx={{ mt: 3, mb: 1 }}>My accepted projects</Typography>
       <Stack spacing={1.5}>
         {accepted.length === 0 ? (
           <Card variant="outlined"><CardContent>
-            <Typography variant="body2" color="text.secondary">You haven’t accepted any invitations yet.</Typography>
+            <Typography variant="body2" color="text.secondary">You haven’t accepted any projects yet.</Typography>
           </CardContent></Card>
-        ) : accepted.map(inv => <AcceptedRow key={inv.id} inv={inv} />)}
+        ) : accepted.map(inv => <AcceptedCard key={inv.id} inv={inv} />)}
       </Stack>
-
-      {/* Expired & Declined (collapsed into a simple summary) */}
-      {(expired.length > 0 || declined.length > 0) && (
-        <>
-          <Typography variant="subtitle2" sx={{ mt: 3, mb: 1 }}>History</Typography>
-          <Grid container spacing={1.5}>
-            {expired.map(inv => (
-              <Grid key={inv.id} item xs={12} md={6}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Chip size="small" color="error" label="Expired" />
-                      <Typography variant="body2" sx={{ flex: 1 }}>{inv.projectName}</Typography>
-                    </Stack>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-            {declined.map(inv => (
-              <Grid key={inv.id} item xs={12} md={6}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Chip size="small" label="Declined" />
-                      <Typography variant="body2" sx={{ flex: 1 }}>{inv.projectName}</Typography>
-                    </Stack>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
-        </>
-      )}
-
-      {/* Dialogs */}
-      <PreviewDialog />
-      <TrainingDialog />
 
       {/* Toast */}
       <Snackbar
